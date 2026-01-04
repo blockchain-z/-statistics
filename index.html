@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STATISTICS_OPS // 統計學戰術測驗系統 v3.1</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;500;700&family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #050510;
+            --neon-cyan: #00f3ff;
+            --neon-blue: #00aaff;
+            --neon-purple: #bc13fe;
+            --neon-green: #0aff0a;
+            --neon-red: #ff003c;
+            --glass-bg: rgba(10, 20, 40, 0.9);
+            --grid-color: rgba(0, 243, 255, 0.05);
+        }
+
+        * { box-sizing: border-box; user-select: none; }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            color: var(--neon-cyan);
+            font-family: 'Noto Sans TC', sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+            /* Cyber Grid Background */
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* Scanline Overlay */
+        body::after {
+            content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none; z-index: 999;
+        }
+
+        .tech-font { font-family: 'Orbitron', sans-serif; letter-spacing: 2px; }
+        .mono-font { font-family: 'Share Tech Mono', monospace; }
+
+        .container {
+            max-width: 900px; margin: 0 auto; padding: 20px;
+            position: relative; z-index: 10; padding-top: 80px;
+        }
+
+        /* Cyber Card Style */
+        .cyber-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
+            padding: 30px; margin-bottom: 20px;
+            position: relative;
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%);
+            backdrop-filter: blur(5px);
+        }
+        .cyber-card::before {
+            content: ""; position: absolute; top: 0; left: 0; width: 20px; height: 20px;
+            border-top: 2px solid var(--neon-cyan); border-left: 2px solid var(--neon-cyan);
+        }
+        .cyber-card::after {
+            content: ""; position: absolute; bottom: 0; right: 0; width: 20px; height: 20px;
+            border-bottom: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-cyan);
+        }
+
+        h1 { font-size: 2rem; color: #fff; text-align: center; text-shadow: 0 0 10px var(--neon-cyan); margin: 0; }
+        h3 { color: #888; text-align: center; letter-spacing: 3px; font-size: 0.9rem; margin-top: 5px; }
+
+        /* Buttons */
+        .btn {
+            background: rgba(0, 243, 255, 0.1); 
+            border: 1px solid var(--neon-cyan); color: var(--neon-cyan);
+            padding: 12px 30px; font-family: 'Share Tech Mono'; font-size: 1.2rem;
+            cursor: pointer; transition: 0.3s; text-transform: uppercase;
+            clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
+            margin: 5px;
+        }
+        .btn:hover { background: var(--neon-cyan); color: #000; box-shadow: 0 0 25px var(--neon-cyan); }
+        .btn.secondary { border-color: var(--neon-purple); color: var(--neon-purple); background: rgba(188, 19, 254, 0.1); }
+        .btn.secondary:hover { background: var(--neon-purple); color: #fff; box-shadow: 0 0 25px var(--neon-purple); }
+        
+        /* Options */
+        .options-group { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+        .option-label {
+            display: flex; align-items: center; padding: 15px;
+            border: 1px solid rgba(0, 243, 255, 0.3); background: rgba(0, 0, 0, 0.6);
+            cursor: pointer; transition: 0.2s; position: relative;
+        }
+        .option-label:hover { border-color: var(--neon-cyan); background: rgba(0, 243, 255, 0.2); }
+        .option-label.selected { background: rgba(0, 243, 255, 0.3); border-color: var(--neon-cyan); box-shadow: inset 0 0 15px rgba(0, 243, 255, 0.2); }
+        
+        .option-label.correct { border-color: var(--neon-green); background: rgba(10, 255, 10, 0.2); color: var(--neon-green); }
+        .option-label.wrong { border-color: var(--neon-red); background: rgba(255, 0, 60, 0.2); color: var(--neon-red); }
+
+        .option-label input { margin-right: 15px; transform: scale(1.2); accent-color: var(--neon-cyan); }
+
+        /* HUD Header */
+        #hud-display {
+            display: none; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.9); border-bottom: 2px solid var(--neon-cyan);
+            padding: 10px 20px; position: fixed; top: 0; left: 0; width: 100%; z-index: 100;
+        }
+        .hud-item { font-family: 'Share Tech Mono'; font-size: 1.2rem; display: flex; flex-direction: column; }
+        .hud-label { font-size: 0.7rem; color: #666; letter-spacing: 1px; }
+
+        /* Graphics Area */
+        .visual-data-container {
+            border: 1px dashed var(--neon-blue);
+            background: rgba(0,0,0,0.3);
+            padding: 20px; margin: 15px 0;
+            text-align: center;
+            display: none; /* Show only when needed */
+        }
+        .visual-label {
+            color: var(--neon-blue); font-size: 0.8rem; letter-spacing: 2px; margin-bottom: 10px; display: block;
+        }
+        svg {
+            max-width: 100%; height: auto;
+            filter: drop-shadow(0 0 8px rgba(0, 243, 255, 0.3));
+        }
+        /* Graph Styles matching User Image */
+        .graph-line { fill: none; stroke: #00aaff; stroke-width: 3; }
+        .graph-axis { stroke: #888; stroke-width: 2; }
+        .graph-area { fill: rgba(0, 170, 255, 0.25); }
+        .graph-text { fill: #fff; font-size: 16px; font-family: 'Times New Roman', serif; font-style: italic; }
+        .graph-label { fill: #aaa; font-size: 14px; font-family: sans-serif; }
+        .center-line { stroke: #555; stroke-width: 1; }
+        .k-line { stroke: #555; stroke-width: 1.5; }
+
+        /* Screens */
+        .screen { display: none; }
+        .screen.active { display: block; animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        select {
+            background: #000; color: var(--neon-cyan); border: 1px solid var(--neon-cyan);
+            padding: 10px; width: 100%; font-family: 'Share Tech Mono'; font-size: 1.1rem;
+        }
+
+        .grade-S { color: var(--neon-green); text-shadow: 0 0 10px var(--neon-green); }
+        .grade-A { color: var(--neon-cyan); }
+        .grade-D { color: var(--neon-red); }
+
+        .math { font-family: 'Times New Roman', serif; font-style: italic; }
+
+    </style>
+</head>
+<body>
+
+    <div id="hud-display">
+        <div class="hud-item">
+            <span class="hud-label">SYSTEM_CLOCK</span>
+            <span id="timer" style="color:#fff">00:00</span>
+        </div>
+        <div class="hud-item" style="align-items: center;">
+            <span class="hud-label">PROGRESS</span>
+            <span id="progress">00 / 00</span>
+        </div>
+        <div class="hud-item" style="align-items: flex-end;">
+            <span class="hud-label">PROTOCOL</span>
+            <span id="hud-mode" style="color:var(--neon-purple)">STANDBY</span>
+        </div>
+    </div>
+
+    <div class="container">
+        
+        <div id="menu-screen" class="screen active cyber-card">
+            <h1 class="tech-font">STATISTICS <span style="color:var(--neon-purple)">OPS</span></h1>
+            <h3>統計學戰術測驗系統 v3.1</h3>
+            <hr style="border:0; border-top:1px solid rgba(0,243,255,0.3); margin:20px 0;">
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div>
+                    <label class="hud-label" style="display:block; margin-bottom:5px;">DATA_VOLUME (題數)</label>
+                    <select id="q-count">
+                        <option value="10">10 題 (輕量掃描)</option>
+                        <option value="25">25 題 (標準作戰)</option>
+                        <option value="50">50 題 (全域戰役)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="hud-label" style="display:block; margin-bottom:5px;">TACTIC_MODE (模式)</label>
+                    <select id="game-mode">
+                        <option value="exam">標準測驗 (EXAM) - 結算成績</option>
+                        <option value="practice">即時演練 (PRACTICE) - 立即解析</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 40px;">
+                <button class="btn" onclick="startSystem()">INITIALIZE (啟動)</button>
+            </div>
+
+            <div style="margin-top: 40px;">
+                <h4 class="tech-font" style="border-bottom: 1px solid var(--neon-purple); display:inline-block; color:#fff;">RECENT_LOGS</h4>
+                <div id="history-list" style="font-size:0.9rem;"></div>
+            </div>
+        </div>
+
+        <div id="quiz-screen" class="screen cyber-card">
+            <div id="visual-container" class="visual-data-container">
+                <span id="visual-title" class="visual-label">/// VISUAL_DATA_INTERCEPTED ///</span>
+                <div id="visual-content"></div>
+            </div>
+
+            <div id="question-text" style="font-size: 1.3rem; margin-bottom: 20px; line-height: 1.6;"></div>
+            
+            <div id="options-container" class="options-group"></div>
+
+            <div id="practice-feedback" style="display:none; margin-top:20px; padding:15px; border-left:3px solid var(--neon-purple); background:rgba(188,19,254,0.1);">
+                <strong id="feedback-status"></strong><br>
+                <span id="feedback-text" style="color:#ccc; font-size:0.95rem;"></span>
+            </div>
+
+            <div style="margin-top: 30px; text-align: right;">
+                <button id="btn-check" class="btn secondary" style="display:none;" onclick="checkPractice()">CONFIRM (確認)</button>
+                <button id="btn-next" class="btn" onclick="nextQuestion()">NEXT NODE ></button>
+            </div>
+        </div>
+
+        <div id="result-screen" class="screen cyber-card">
+            <h2 class="tech-font">MISSION REPORT</h2>
+            <div style="text-align:center; font-size:4rem; margin:20px 0; color:#fff;" class="tech-font">
+                <span id="final-score">0</span>%
+            </div>
+            <div style="text-align:center; margin-bottom:20px; font-size:1.5rem;">
+                RANK: <span id="final-rank">F</span>
+            </div>
+            
+            <div id="error-log" style="max-height:400px; overflow-y:auto; background:rgba(0,0,0,0.5); padding:15px; margin-bottom:20px;"></div>
+
+            <div style="text-align: center;">
+                <button class="btn" onclick="returnToMenu()">RETURN TO HUB</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // === SVG GENERATOR ===
+        // 用程式碼畫出跟您上傳圖片一樣的圖表
+        
+        function getSVG_Distribution(type, labelValue) {
+            // E-1: Normal, Right Tail shaded
+            if (type === 'E-1') {
+                return `
+                <svg viewBox="0 0 320 160" width="320" height="160">
+                    <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#fff" /></marker></defs>
+                    <line x1="10" y1="140" x2="310" y2="140" class="graph-axis"/>
+                    <path d="M210,95 L210,140 L300,140 C280,140 250,95 210,95 Z" class="graph-area"/>
+                    <path d="M20,140 C80,140 120,20 160,20 C200,20 240,140 300,140" class="graph-line"/>
+                    <line x1="160" y1="20" x2="160" y2="140" class="center-line"/>
+                    <line x1="210" y1="95" x2="210" y2="140" class="k-line"/>
+                    <text x="205" y="155" class="graph-text">k</text>
+                    <text x="305" y="155" class="graph-text">Z</text>
+                    <path d="M260,110 Q245,115 230,125" fill="none" stroke="#fff" marker-end="url(#arrow)"/>
+                    <text x="265" y="110" class="graph-text">${labelValue}</text>
+                </svg>`;
+            } 
+            // E-2: T-Dist, Left Side shaded
+            else if (type === 'E-2') {
+                return `
+                <svg viewBox="0 0 320 160" width="320" height="160">
+                    <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#fff" /></marker></defs>
+                    <line x1="10" y1="140" x2="310" y2="140" class="graph-axis"/>
+                    <path d="M20,140 C80,140 120,20 160,20 C180,20 200,60 210,95 L210,140 L20,140 Z" class="graph-area"/>
+                    <path d="M20,140 C80,140 120,20 160,20 C200,20 240,140 300,140" class="graph-line"/>
+                    <line x1="160" y1="20" x2="160" y2="140" class="center-line"/>
+                    <line x1="210" y1="95" x2="210" y2="140" class="k-line"/>
+                    <text x="205" y="155" class="graph-text">k</text>
+                    <text x="305" y="155" class="graph-text">T</text>
+                    <path d="M100,100 Q130,110 145,120" fill="none" stroke="#fff" marker-end="url(#arrow)"/>
+                    <text x="50" y="100" class="graph-text">${labelValue}</text>
+                </svg>`;
+            }
+            // E-3: Chi-Square, Left Tail shaded
+            else if (type === 'E-3') {
+                return `
+                <svg viewBox="0 0 320 160" width="320" height="160">
+                    <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#fff" /></marker></defs>
+                    <line x1="10" y1="140" x2="310" y2="140" class="graph-axis"/>
+                    <path d="M20,140 Q25,80 40,55 L40,140 Z" class="graph-area"/>
+                    <path d="M20,140 Q30,20 80,40 T300,140" class="graph-line"/>
+                    <line x1="40" y1="55" x2="40" y2="140" class="k-line"/>
+                    <text x="35" y="155" class="graph-text">k</text>
+                    <text x="300" y="150" class="graph-text" font-family="Times New Roman">χ²</text>
+                    <path d="M10,80 Q25,90 35,100" fill="none" stroke="#fff" marker-end="url(#arrow)"/>
+                    <text x="5" y="75" class="graph-text">${labelValue}</text>
+                </svg>`;
+            }
+        }
+
+        // === DATA BANK ===
+        const questionBank = [
+            // 圖表題 (Q2, Q3, Q4)
+            {
+                id: "p1-2",
+                question: "設隨機變數 Z 服從標準常態分配，試求出滿足 [圖 E-1] 中陰影區域面積為 0.2266 的 k 值為何？",
+                visual: "E-1", visualLabel: "0.2266", visualTitle: "/// 圖 E-1 (FIGURE E-1) ///",
+                options: ["1.21", "0.52", "0.75", "2.25"],
+                answer: 2, // 0.75
+                explanation: "圖 E-1 顯示右尾面積為 0.2266，代表左側累積機率為 1 - 0.2266 = 0.7734。查 Z 表可知 Z(0.7734) ≈ 0.75。"
+            },
+            {
+                id: "p1-3",
+                question: "設隨機變數 T 服從自由度為 10 的 t 分配，試求出滿足 [圖 E-2] 的 k 值為何？(左側面積為 0.975)",
+                visual: "E-2", visualLabel: "0.975", visualTitle: "/// 圖 E-2 (FIGURE E-2) ///",
+                options: ["1.372", "1.812", "2.228", "3.169"],
+                answer: 2, // 2.228
+                explanation: "圖 E-2 顯示 k 左側面積為 0.975，即 k 為第 97.5 百分位數。查 t 表 (df=10, α=0.025) 可得 t=2.228。"
+            },
+            {
+                id: "p1-4",
+                question: "設隨機變數服從自由度 20 的卡方分配，試求出滿足 [圖 E-3] 的 k 值為何？(左側面積為 0.1)",
+                visual: "E-3", visualLabel: "0.1", visualTitle: "/// 圖 E-3 (FIGURE E-3) ///",
+                options: ["10.851", "12.443", "31.410", "37.566"],
+                answer: 1, // 12.443
+                explanation: "圖 E-3 顯示 k 左側累積機率為 0.1。查卡方表 (df=20) 的左尾 0.1 (或右尾 0.9)，對應數值約為 12.443。"
+            },
+            // 其他文字題
+            {
+                id: "p1-5",
+                question: "已知 <span class='math'>Z ~ N(0,1)</span>，試求 <span class='math'>P(-2 ≤ Z ≤ 2)</span> 的機率為何？",
+                options: ["0.6826", "0.9545", "0.9974", "1"],
+                answer: 1, explanation: "根據經驗法則，常態分配 ±2 個標準差內的機率約為 0.9545。"
+            },
+            {
+                id: "p1-6",
+                question: "某班有100位同學，期中考成績服從平均數70分，標準差10分的常態分配，試問全班同學期中考的中位數為何？",
+                options: ["70分", "80分", "85分", "資訊不足，無法判斷"],
+                answer: 0, explanation: "常態分配是對稱的，平均數 = 中位數 = 眾數。故中位數為 70。"
+            },
+            {
+                id: "p1-10",
+                question: "下列哪一個分配**不是**對稱分配？",
+                options: ["常態分配", "標準常態分配", "t 分配", "卡方分配"],
+                answer: 3, explanation: "卡方分配 (Chi-square) 為右偏分配，不對稱。"
+            },
+            {
+                id: "p2-1",
+                question: "下列哪一個**不是**隨機樣本的必要條件？",
+                options: ["樣本要抽自相同母體", "樣本間要相互獨立", "要採隨機抽樣進行抽樣", "母體一定要常態母體"],
+                answer: 3, explanation: "隨機樣本 (i.i.d) 不要求母體必須是常態分配。"
+            },
+            {
+                id: "p2-5",
+                question: "抽樣分配指的是哪一個數的機率分配？",
+                options: ["母體平均數", "樣本平均數 X̄", "母體變異數", "母體比例 P"],
+                answer: 1, explanation: "抽樣分配是指「統計量」(如樣本平均數 X̄) 的機率分配。"
+            },
+            {
+                id: "p2-9",
+                question: "依據中央極限定理，當下列哪一個條件成立時，任何統計量的機率分配都會近似常態分配？",
+                options: ["樣本數夠大", "樣本平均數夠大", "樣本標準差夠大", "樣本變異數夠大"],
+                answer: 0, explanation: "中央極限定理 (CLT) 指出當「樣本數 n 夠大」(通常 n ≥ 30) 時，樣本平均數的分配會近似常態。"
+            },
+            {
+                id: "p3-1",
+                question: "在信賴水準固定下，如果增加樣本數，則信賴區間的長度會如何變化？",
+                options: ["變長", "變短", "不變", "無法判斷"],
+                answer: 1, explanation: "區間長度與 1/√n 成反比。樣本數 n 越大，誤差越小，區間越短。"
+            },
+            {
+                id: "p4-3",
+                question: "檢定 H0: μ ≤ 21 vs H1: μ > 21，如果實際上 μ = 23 (H1為真)，若檢定結果接受 H0，則發生何種錯誤？",
+                options: ["型 I 誤差", "型 II 誤差", "兩者皆有", "兩者皆無"],
+                answer: 1, explanation: "H1 為真卻接受 H0 (沒有拒絕錯誤的 H0)，這是犯了型 II 誤差 (Type II Error)。"
+            }
+        ];
+
+        // === SYSTEM LOGIC ===
+        let currentQuestions = [];
+        let currentIndex = 0;
+        let timerInterval;
+        let secondsElapsed = 0;
+        let userAnswers = {}; 
+        let mode = 'exam';
+        let isPracticeChecked = false;
+
+        function startSystem() {
+            const count = parseInt(document.getElementById('q-count').value);
+            mode = document.getElementById('game-mode').value;
+            
+            // Randomize
+            let pool = [...questionBank];
+            for (let i = pool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pool[i], pool[j]] = [pool[j], pool[i]];
+            }
+            currentQuestions = pool.slice(0, count);
+            
+            currentIndex = 0; userAnswers = {}; secondsElapsed = 0; isPracticeChecked = false;
+            
+            document.getElementById('hud-mode').innerText = mode.toUpperCase();
+            document.getElementById('hud-display').style.display = 'flex';
+            switchScreen('quiz-screen');
+            startTimer();
+            renderQuestion();
+        }
+
+        function renderQuestion() {
+            const q = currentQuestions[currentIndex];
+            const total = currentQuestions.length;
+            
+            document.getElementById('progress').innerText = `${String(currentIndex + 1).padStart(2,'0')} / ${String(total).padStart(2,'0')}`;
+            
+            // Visual Data
+            const visualContainer = document.getElementById('visual-container');
+            if (q.visual) {
+                visualContainer.style.display = 'block';
+                document.getElementById('visual-title').innerText = q.visualTitle;
+                document.getElementById('visual-content').innerHTML = getSVG_Distribution(q.visual, q.visualLabel);
+            } else {
+                visualContainer.style.display = 'none';
+            }
+
+            document.getElementById('question-text').innerHTML = q.question;
+
+            // Options
+            const optsContainer = document.getElementById('options-container');
+            optsContainer.innerHTML = '';
+            
+            q.options.forEach((opt, idx) => {
+                const label = document.createElement('label');
+                label.className = 'option-label';
+                label.onclick = () => selectOption(idx);
+                const input = document.createElement('input');
+                input.type = 'radio'; input.name = 'opt'; input.value = idx;
+                
+                if (userAnswers[q.id] === idx) {
+                    input.checked = true; label.classList.add('selected');
+                }
+                
+                if (mode === 'practice' && isPracticeChecked) {
+                    input.disabled = true; label.style.cursor = 'default';
+                    if (idx === q.answer) label.classList.add('correct');
+                    else if (userAnswers[q.id] === idx) label.classList.add('wrong');
+                }
+
+                label.appendChild(input);
+                label.appendChild(document.createTextNode(opt));
+                optsContainer.appendChild(label);
+            });
+
+            // Buttons
+            const feedback = document.getElementById('practice-feedback');
+            feedback.style.display = 'none';
+            const btnCheck = document.getElementById('btn-check');
+            const btnNext = document.getElementById('btn-next');
+
+            if (mode === 'practice') {
+                if (isPracticeChecked) {
+                    feedback.style.display = 'block';
+                    const isCorrect = userAnswers[q.id] === q.answer;
+                    document.getElementById('feedback-status').innerHTML = isCorrect ? 
+                        `<span style="color:var(--neon-green)">[CORRECT] 參數正確</span>` : 
+                        `<span style="color:var(--neon-red)">[ERROR] 參數錯誤</span>`;
+                    document.getElementById('feedback-text').innerText = q.explanation;
+                    btnCheck.style.display = 'none'; btnNext.style.display = 'inline-block';
+                } else {
+                    btnCheck.style.display = 'inline-block'; btnNext.style.display = 'none';
+                }
+            } else {
+                btnCheck.style.display = 'none'; btnNext.style.display = 'inline-block';
+                btnNext.innerText = (currentIndex === total - 1) ? 'SUBMIT (交卷)' : 'NEXT NODE >';
+            }
+        }
+
+        function selectOption(idx) {
+            if (mode === 'practice' && isPracticeChecked) return;
+            const qId = currentQuestions[currentIndex].id;
+            userAnswers[qId] = idx;
+            document.querySelectorAll('.option-label').forEach(l => l.classList.remove('selected'));
+            document.querySelectorAll('input[name="opt"]')[idx].checked = true;
+            document.querySelectorAll('.option-label')[idx].classList.add('selected');
+        }
+
+        function checkPractice() {
+            const qId = currentQuestions[currentIndex].id;
+            if (userAnswers[qId] === undefined) { alert("WARNING: No Input Data."); return; }
+            isPracticeChecked = true; renderQuestion();
+        }
+
+        function nextQuestion() {
+            if (mode === 'exam' && userAnswers[currentQuestions[currentIndex].id] === undefined) {
+                if(!confirm("ALERT: 當前節點無數據。確定跳過？")) return;
+            }
+            if (currentIndex < currentQuestions.length - 1) {
+                currentIndex++; isPracticeChecked = false; renderQuestion();
+            } else {
+                finishExam();
+            }
+        }
+
+        function finishExam() {
+            clearInterval(timerInterval);
+            document.getElementById('hud-display').style.display = 'none';
+            switchScreen('result-screen');
+
+            let correct = 0; let logHtml = '';
+            currentQuestions.forEach((q, i) => {
+                const myAns = userAnswers[q.id];
+                if (myAns === q.answer) correct++;
+                else {
+                    const myText = myAns !== undefined ? q.options[myAns] : "無訊號";
+                    logHtml += `<div style="border-bottom:1px dashed #555; padding:10px 0;">
+                        <div style="color:#fff; margin-bottom:5px;">Q: ${q.question}</div>
+                        <div style="color:var(--neon-red)">You: ${myText}</div>
+                        <div style="color:var(--neon-green)">Ans: ${q.options[q.answer]}</div>
+                        <div style="color:#aaa; font-size:0.85rem; margin-top:5px;">解析: ${q.explanation}</div>
+                    </div>`;
+                }
+            });
+
+            if (logHtml === '') logHtml = '<div style="text-align:center; color:var(--neon-green); margin-top:20px;">PERFECT SYNCHRONIZATION. 無異常數據。</div>';
+            document.getElementById('error-log').innerHTML = logHtml;
+            
+            const score = Math.round((correct / currentQuestions.length) * 100);
+            document.getElementById('final-score').innerText = score;
+            let rank = score >= 90 ? 'S' : (score >= 80 ? 'A' : (score >= 60 ? 'B' : 'F'));
+            document.getElementById('final-rank').innerText = rank;
+            document.getElementById('final-rank').className = `grade-${rank}`;
+            
+            saveHistory(score, rank, currentQuestions.length);
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                secondsElapsed++;
+                const m = Math.floor(secondsElapsed / 60).toString().padStart(2, '0');
+                const s = (secondsElapsed % 60).toString().padStart(2, '0');
+                document.getElementById('timer').innerText = `${m}:${s}`;
+            }, 1000);
+        }
+
+        function switchScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            window.scrollTo(0,0);
+            if (id === 'menu-screen') renderHistory();
+        }
+
+        function returnToMenu() { switchScreen('menu-screen'); }
+
+        function saveHistory(score, rank, total) {
+            const h = JSON.parse(localStorage.getItem('stats_ops_history') || '[]');
+            h.unshift({
+                date: new Date().toLocaleString('zh-TW', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}),
+                score: score, rank: rank, total: total, mode: mode
+            });
+            if(h.length > 10) h.pop();
+            localStorage.setItem('stats_ops_history', JSON.stringify(h));
+        }
+
+        function renderHistory() {
+            const h = JSON.parse(localStorage.getItem('stats_ops_history') || '[]');
+            const list = document.getElementById('history-list');
+            if (h.length === 0) { list.innerHTML = '<div style="text-align:center; color:#555; padding:10px;">[ NO DATA LOGS ]</div>'; return; }
+            let html = '<table style="width:100%; border-collapse:collapse;">';
+            h.forEach(rec => {
+                let color = rec.rank === 'S' || rec.rank === 'A' ? 'var(--neon-green)' : (rec.rank === 'F' ? 'var(--neon-red)' : '#fff');
+                html += `<tr style="border-bottom:1px solid #333;"><td style="padding:8px;">${rec.date}</td><td>${rec.mode.toUpperCase()}</td><td style="color:${color}; font-weight:bold;">${rec.rank}</td><td style="text-align:right;">${rec.score}</td></tr>`;
+            });
+            list.innerHTML = html + '</table>';
+        }
+
+        window.onload = renderHistory;
+    </script>
+</body>
+</html>
