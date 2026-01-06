@@ -663,230 +663,253 @@
     }
 ];
 
-        // === SYSTEM LOGIC ===
+       // === SYSTEM LOGIC ===
         let currentQuestions = [];
-        let currentIndex = 0;
+        let currentIndex = 0; // 現在代表「第幾頁(第幾組)」
         let timerInterval;
         let secondsElapsed = 0;
         let userAnswers = {}; 
         let mode = 'exam';
         let isPracticeChecked = false;
-        // === 新增功能：處理題目分組與文字清理 ===
-   function getShuffledGroupedQuestions(bank) {
-        const continuationKeywords = ["續上題", "承上題", "接上題"];
-        let groups = [];
-        let currentGroup = [];
 
-        bank.forEach((q) => {
-            // 清理題目文字
-            let cleanText = q.question.replace(/^\s*(?:[Qq]\d+\s*question:|\d+\.?)\s*/i, "");
-            let processedQ = { ...q, question: cleanText };
+        // --- 核心功能：題目自動分組與清洗 ---
+        function getShuffledGroupedQuestions(bank) {
+            const continuationKeywords = ["續上題", "承上題", "接上題"];
+            let groups = [];
+            let currentGroup = [];
 
-            let isContinuation = continuationKeywords.some(kw => cleanText.includes(kw));
+            bank.forEach((q) => {
+                // 1. 清理題目文字：移除 "Q48 question:" 或 "48." 開頭
+                let cleanText = q.question.replace(/^\s*(?:[Qq]\d+\s*question:|\d+\.?)\s*/i, "");
+                // 複製物件以免修改原始資料
+                let processedQ = { ...q, question: cleanText };
 
-            if (isContinuation && currentGroup.length > 0) {
-                currentGroup.push(processedQ);
-            } else {
-                if (currentGroup.length > 0) groups.push(currentGroup);
-                currentGroup = [processedQ];
+                // 2. 判斷是否為續上題
+                let isContinuation = continuationKeywords.some(kw => cleanText.includes(kw));
+
+                if (isContinuation && currentGroup.length > 0) {
+                    currentGroup.push(processedQ);
+                } else {
+                    if (currentGroup.length > 0) groups.push(currentGroup);
+                    currentGroup = [processedQ];
+                }
+            });
+            // 存入最後一組
+            if (currentGroup.length > 0) groups.push(currentGroup);
+
+            // 3. 對「群組」進行洗牌
+            for (let i = groups.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [groups[i], groups[j]] = [groups[j], groups[i]];
             }
-        });
-        if (currentGroup.length > 0) groups.push(currentGroup);
 
-        // 群組洗牌
-        for (let i = groups.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [groups[i], groups[j]] = [groups[j], groups[i]];
+            // ★ 重要：回傳二維陣列 (群組的列表)，不要攤平
+            return groups;
         }
 
-        // ★★★ 這裡改成直接回傳 groups (原本是 return groups.flat();) ★★★
-        return groups;
-    }
-      function startSystem() {
-        const count = parseInt(document.getElementById('q-count').value);
-        mode = document.getElementById('game-mode').value;
-        
-        // === 修改這裡 START (替換原本的 Randomize 迴圈) ===
-        // 使用新的函式取得「已洗牌但保持連續性」的題庫
-        let pool = getShuffledGroupedQuestions(questionBank);
-        // === 修改這裡 END ===
-
-        // 確保題目數不超過 pool 長度
-        const safeCount = Math.min(count, pool.length);
-        currentQuestions = pool.slice(0, safeCount);
-        
-        currentIndex = 0; userAnswers = {}; secondsElapsed = 0; isPracticeChecked = false;
-        
-        document.getElementById('hud-mode').innerText = mode.toUpperCase();
-        document.getElementById('hud-display').style.display = 'flex';
-        switchScreen('quiz-screen');
-        startTimer();
-        renderQuestion();
-    }
-
-      function renderQuestion() {
-        // 現在 currentQuestions[currentIndex] 是一個「陣列」(題目群組)
-        const group = currentQuestions[currentIndex];
-        const totalScreens = currentQuestions.length;
-
-        // 更新進度條 (顯示 第幾頁 / 共幾頁)
-        document.getElementById('progress').innerText = `${String(currentIndex + 1).padStart(2,'0')} / ${String(totalScreens).padStart(2,'0')}`;
-
-        // 1. 隱藏原本的單題顯示區 (因為我們要動態生成)
-        document.getElementById('visual-container').style.display = 'none';
-        document.getElementById('question-text').style.display = 'none';
-        document.getElementById('options-container').style.display = 'none';
-        
-        // 2. 檢查或建立一個專門放題組的容器
-        let groupContainer = document.getElementById('dynamic-group-area');
-        if (!groupContainer) {
-            groupContainer = document.createElement('div');
-            groupContainer.id = 'dynamic-group-area';
-            // 插入在 options-container 之後
-            const optsContainer = document.getElementById('options-container');
-            optsContainer.parentNode.insertBefore(groupContainer, optsContainer.nextSibling);
-        }
-        groupContainer.innerHTML = ''; // 清空內容
-
-        // 3. 迴圈生成該群組內的所有題目
-        group.forEach((q, subIndex) => {
-            // 建立單題卡片
-            const qCard = document.createElement('div');
-            qCard.style.marginBottom = '30px';
-            qCard.style.paddingBottom = '20px';
-            // 如果不是最後一題，加個虛線分隔
-            if (subIndex < group.length - 1) {
-                qCard.style.borderBottom = '1px dashed rgba(0, 243, 255, 0.3)';
-            }
-
-            // --- A. 視覺圖表 (如果有) ---
-            if (q.visual) {
-                const visDiv = document.createElement('div');
-                visDiv.className = 'visual-data-container';
-                visDiv.style.display = 'block';
-                visDiv.innerHTML = `
-                    <span class="visual-label">${q.visualTitle}</span>
-                    <div>${getSVG_Distribution(q.visual, q.visualLabel)}</div>
-                `;
-                qCard.appendChild(visDiv);
-            }
-
-            // --- B. 題目文字 ---
-            const txtDiv = document.createElement('div');
-            txtDiv.style.fontSize = '1.3rem';
-            txtDiv.style.marginBottom = '15px';
-            txtDiv.style.lineHeight = '1.6';
-            // 加上題號標示 (例如 Q48) 雖然文字已移除，但我們可以加個索引
-            txtDiv.innerHTML = `<span style="color:var(--neon-purple); font-weight:bold;">[ITEM]</span> ${q.question}`;
-            qCard.appendChild(txtDiv);
-
-            // --- C. 選項 ---
-            const optGroup = document.createElement('div');
-            optGroup.className = 'options-group';
+        function startSystem() {
+            const count = parseInt(document.getElementById('q-count').value);
+            mode = document.getElementById('game-mode').value;
             
-            q.options.forEach((opt, idx) => {
-                const label = document.createElement('label');
-                label.className = 'option-label';
-                // ★ 關鍵：傳入 q.id 給 selectOption
-                label.onclick = () => selectOption(q.id, idx);
-                
-                // 根據狀態設定樣式
-                const myAns = userAnswers[q.id];
-                const isSelected = myAns === idx;
-                
-                if (isSelected) {
-                    label.classList.add('selected');
-                    // 練習模式的對錯顯示
-                    if (mode === 'practice' && isPracticeChecked) {
-                        if (idx === q.answer) label.classList.add('correct');
-                        else label.classList.add('wrong');
-                    } else if (mode === 'practice' && isPracticeChecked && idx === q.answer) {
-                        // 顯示正確答案 (即使沒選)
-                         label.classList.add('correct');
-                    }
-                } else if (mode === 'practice' && isPracticeChecked && idx === q.answer) {
-                     label.classList.add('correct');
+            // 1. 取得分組後的題庫
+            let groupedPool = getShuffledGroupedQuestions(questionBank);
+
+            // 2. 計算要在哪裡切斷 (因為 count 是題數，但 pool 是組數，這裡做個簡單處理：取前 N 組)
+            // 如果要精確控制總題數會比較複雜，這裡建議以「組」為單位抽取，避免切斷題組
+            const safeCount = Math.min(count, groupedPool.length); 
+            currentQuestions = groupedPool.slice(0, safeCount);
+            
+            currentIndex = 0; 
+            userAnswers = {}; 
+            secondsElapsed = 0; 
+            isPracticeChecked = false;
+            
+            document.getElementById('hud-mode').innerText = mode.toUpperCase();
+            document.getElementById('hud-display').style.display = 'flex';
+            switchScreen('quiz-screen');
+            startTimer();
+            renderQuestion();
+        }
+
+        function renderQuestion() {
+            // 取得當前頁面的「題組」
+            const group = currentQuestions[currentIndex];
+            const totalScreens = currentQuestions.length;
+
+            document.getElementById('progress').innerText = `${String(currentIndex + 1).padStart(2,'0')} / ${String(totalScreens).padStart(2,'0')}`;
+
+            // 隱藏原本單題介面
+            document.getElementById('visual-container').style.display = 'none';
+            document.getElementById('question-text').style.display = 'none';
+            document.getElementById('options-container').style.display = 'none';
+            
+            // 準備動態容器
+            let groupContainer = document.getElementById('dynamic-group-area');
+            if (!groupContainer) {
+                groupContainer = document.createElement('div');
+                groupContainer.id = 'dynamic-group-area';
+                const optsContainer = document.getElementById('options-container');
+                optsContainer.parentNode.insertBefore(groupContainer, optsContainer.nextSibling);
+            }
+            groupContainer.innerHTML = ''; 
+
+            // 迴圈生成該頁面的所有題目
+            group.forEach((q, subIndex) => {
+                const qCard = document.createElement('div');
+                qCard.style.marginBottom = '30px';
+                qCard.style.paddingBottom = '20px';
+                if (subIndex < group.length - 1) {
+                    qCard.style.borderBottom = '1px dashed rgba(0, 243, 255, 0.3)';
                 }
 
-                const input = document.createElement('input');
-                input.type = 'radio';
-                input.name = `opt-${q.id}`; // 確保每一題的 name 不一樣
-                input.checked = isSelected;
-                if (mode === 'practice' && isPracticeChecked) input.disabled = true;
+                // A. 圖表
+                if (q.visual) {
+                    const visDiv = document.createElement('div');
+                    visDiv.className = 'visual-data-container';
+                    visDiv.style.display = 'block';
+                    visDiv.innerHTML = `<span class="visual-label">${q.visualTitle}</span><div>${getSVG_Distribution(q.visual, q.visualLabel)}</div>`;
+                    qCard.appendChild(visDiv);
+                }
 
-                label.appendChild(input);
-                label.appendChild(document.createTextNode(opt));
-                optGroup.appendChild(label);
+                // B. 題目
+                const txtDiv = document.createElement('div');
+                txtDiv.style.fontSize = '1.3rem';
+                txtDiv.style.marginBottom = '15px';
+                txtDiv.style.lineHeight = '1.6';
+                txtDiv.innerHTML = `<span style="color:var(--neon-purple); font-weight:bold;">[ITEM]</span> ${q.question}`;
+                qCard.appendChild(txtDiv);
+
+                // C. 選項
+                const optGroup = document.createElement('div');
+                optGroup.className = 'options-group';
+                
+                q.options.forEach((opt, idx) => {
+                    const label = document.createElement('label');
+                    label.className = 'option-label';
+                    label.onclick = () => selectOption(q.id, idx);
+                    
+                    const myAns = userAnswers[q.id];
+                    const isSelected = myAns === idx;
+                    
+                    if (isSelected) {
+                        label.classList.add('selected');
+                        if (mode === 'practice' && isPracticeChecked) {
+                            label.classList.add(idx === q.answer ? 'correct' : 'wrong');
+                        }
+                    }
+                    if (mode === 'practice' && isPracticeChecked && idx === q.answer) {
+                         label.classList.add('correct');
+                    }
+
+                    const input = document.createElement('input');
+                    input.type = 'radio';
+                    input.name = `opt-${q.id}`;
+                    input.checked = isSelected;
+                    if (mode === 'practice' && isPracticeChecked) input.disabled = true;
+
+                    label.appendChild(input);
+                    label.appendChild(document.createTextNode(opt));
+                    optGroup.appendChild(label);
+                });
+                qCard.appendChild(optGroup);
+
+                // D. 解析
+                if (mode === 'practice' && isPracticeChecked) {
+                    const fbDiv = document.createElement('div');
+                    fbDiv.style.marginTop = '10px';
+                    fbDiv.style.padding = '10px';
+                    fbDiv.style.borderLeft = '3px solid var(--neon-purple)';
+                    fbDiv.style.background = 'rgba(188,19,254,0.1)';
+                    const isCorrect = userAnswers[q.id] === q.answer;
+                    const statusHtml = isCorrect ? `<strong style="color:var(--neon-green)">[CORRECT]</strong>` : `<strong style="color:var(--neon-red)">[ERROR]</strong>`;
+                    fbDiv.innerHTML = `${statusHtml} <span style="color:#ccc; font-size:0.9rem;">${q.explanation}</span>`;
+                    qCard.appendChild(fbDiv);
+                }
+
+                groupContainer.appendChild(qCard);
             });
-            qCard.appendChild(optGroup);
 
-            // --- D. 練習模式解析 (每題下方獨立顯示) ---
-            if (mode === 'practice' && isPracticeChecked) {
-                const fbDiv = document.createElement('div');
-                fbDiv.style.marginTop = '10px';
-                fbDiv.style.padding = '10px';
-                fbDiv.style.borderLeft = '3px solid var(--neon-purple)';
-                fbDiv.style.background = 'rgba(188,19,254,0.1)';
-                
-                const isCorrect = userAnswers[q.id] === q.answer;
-                const statusHtml = isCorrect ? 
-                    `<strong style="color:var(--neon-green)">[CORRECT]</strong>` : 
-                    `<strong style="color:var(--neon-red)">[ERROR]</strong>`;
-                
-                fbDiv.innerHTML = `${statusHtml} <span style="color:#ccc; font-size:0.9rem;">${q.explanation}</span>`;
-                qCard.appendChild(fbDiv);
-            }
+            // 按鈕顯示邏輯
+            const btnCheck = document.getElementById('btn-check');
+            const btnNext = document.getElementById('btn-next');
 
-            groupContainer.appendChild(qCard);
-        });
-
-        // 按鈕邏輯
-        const btnCheck = document.getElementById('btn-check');
-        const btnNext = document.getElementById('btn-next');
-
-        if (mode === 'practice') {
-            if (isPracticeChecked) {
+            if (mode === 'practice') {
+                if (isPracticeChecked) {
+                    btnCheck.style.display = 'none';
+                    btnNext.style.display = 'inline-block';
+                } else {
+                    btnCheck.style.display = 'inline-block';
+                    btnNext.style.display = 'none';
+                }
+            } else {
                 btnCheck.style.display = 'none';
                 btnNext.style.display = 'inline-block';
-            } else {
-                btnCheck.style.display = 'inline-block';
-                btnNext.style.display = 'none';
             }
-        } else {
-            btnCheck.style.display = 'none';
-            btnNext.style.display = 'inline-block';
+            
+            btnNext.innerText = (currentIndex === totalScreens - 1) ? 'SUBMIT (交卷)' : 'NEXT PAGE >';
         }
-        
-        btnNext.innerText = (currentIndex === totalScreens - 1) ? 'SUBMIT (交卷)' : 'NEXT PAGE >';
-    }
-       function selectOption(qId, idx) {
-        if (mode === 'practice' && isPracticeChecked) return;
-        
-        // 記錄答案
-        userAnswers[qId] = idx;
-        
-        // 更新 UI (只更新該題的選項樣式)
-        // 找到該題的所有 radio buttons
-        const radios = document.getElementsByName(`opt-${qId}`);
-        radios.forEach((radio, i) => {
-            // 找到對應的 label (radio 的父元素)
-            const label = radio.parentNode;
-            if (i === idx) {
-                radio.checked = true;
-                label.classList.add('selected');
-            } else {
-                radio.checked = false;
-                label.classList.remove('selected');
+
+        function selectOption(qId, idx) {
+            if (mode === 'practice' && isPracticeChecked) return;
+            userAnswers[qId] = idx;
+            // 更新 UI
+            const radios = document.getElementsByName(`opt-${qId}`);
+            radios.forEach((radio, i) => {
+                const label = radio.parentNode;
+                if (i === idx) {
+                    radio.checked = true;
+                    label.classList.add('selected');
+                } else {
+                    radio.checked = false;
+                    label.classList.remove('selected');
+                }
+            });
+        }
+
+        function checkPractice() {
+            const group = currentQuestions[currentIndex];
+            const unanswered = group.filter(q => userAnswers[q.id] === undefined);
+            if (unanswered.length > 0) {
+                alert("WARNING: 本頁尚有未完成的節點。");
+                return;
             }
-        });
-    }
+            isPracticeChecked = true;
+            renderQuestion();
+        }
+
+        function nextQuestion() {
+            const group = currentQuestions[currentIndex];
+            if (mode === 'exam') {
+                 const unanswered = group.some(q => userAnswers[q.id] === undefined);
+                 if (unanswered) {
+                     if(!confirm("ALERT: 本頁尚有未完成的節點。確定跳過？")) return;
+                 }
+            }
+
+            if (currentIndex < currentQuestions.length - 1) {
+                currentIndex++;
+                isPracticeChecked = false;
+                window.scrollTo(0,0);
+                const quizScreen = document.getElementById('quiz-screen');
+                if(quizScreen) quizScreen.scrollTop = 0;
+                renderQuestion();
+            } else {
+                finishExam();
+            }
+        }
+
         function finishExam() {
             clearInterval(timerInterval);
             document.getElementById('hud-display').style.display = 'none';
             switchScreen('result-screen');
 
-            let correct = 0; let logHtml = '';
-            currentQuestions.forEach((q, i) => {
+            // ★ 攤平陣列以計算總分
+            const allQuestionsFlat = currentQuestions.flat();
+
+            let correct = 0; 
+            let logHtml = '';
+
+            allQuestionsFlat.forEach((q) => {
                 const myAns = userAnswers[q.id];
                 if (myAns === q.answer) correct++;
                 else {
@@ -903,13 +926,16 @@
             if (logHtml === '') logHtml = '<div style="text-align:center; color:var(--neon-green); margin-top:20px;">PERFECT SYNCHRONIZATION. 無異常數據。</div>';
             document.getElementById('error-log').innerHTML = logHtml;
             
-            const score = Math.round((correct / currentQuestions.length) * 100);
+            const score = Math.round((correct / allQuestionsFlat.length) * 100);
             document.getElementById('final-score').innerText = score;
-            let rank = score >= 90 ? 'S' : (score >= 80 ? 'A' : (score >= 60 ? 'B' : 'F'));
-            document.getElementById('final-rank').innerText = rank;
-            document.getElementById('final-rank').className = `grade-${rank}`;
             
-            saveHistory(score, rank, currentQuestions.length);
+            let rank = score >= 90 ? 'S' : (score >= 80 ? 'A' : (score >= 60 ? 'B' : 'F'));
+            const rankEl = document.getElementById('final-rank');
+            rankEl.innerText = rank;
+            rankEl.className = ''; 
+            rankEl.classList.add(`grade-${rank}`);
+            
+            saveHistory(score, rank, allQuestionsFlat.length);
         }
 
         function startTimer() {
