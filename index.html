@@ -671,27 +671,71 @@
         let userAnswers = {}; 
         let mode = 'exam';
         let isPracticeChecked = false;
+        // === 新增功能：處理題目分組與文字清理 ===
+    function getShuffledGroupedQuestions(bank) {
+        // 1. 定義續上題的關鍵字
+        const continuationKeywords = ["續上題", "承上題", "接上題"];
+        
+        let groups = [];
+        let currentGroup = [];
 
-        function startSystem() {
-            const count = parseInt(document.getElementById('q-count').value);
-            mode = document.getElementById('game-mode').value;
+        bank.forEach((q) => {
+            // A. 清理題目文字：移除 "Q48 question:" 或 "48." 這種開頭
+            // Regex 邏輯：匹配 (Q數字 question:) 或 (數字.) 開頭並移除
+            let cleanText = q.question.replace(/^\s*(?:[Qq]\d+\s*question:|\d+\.?)\s*/i, "");
             
-            // Randomize
-            let pool = [...questionBank];
-            for (let i = pool.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [pool[i], pool[j]] = [pool[j], pool[i]];
+            // 複製題目物件以免修改到原始資料
+            let processedQ = { ...q, question: cleanText };
+
+            // B. 判斷是否屬於上一題的延續
+            let isContinuation = continuationKeywords.some(kw => cleanText.includes(kw));
+
+            if (isContinuation && currentGroup.length > 0) {
+                // 如果是續上題，加入目前的群組（綁定在一起）
+                currentGroup.push(processedQ);
+            } else {
+                // 如果不是續上題（是新題目）
+                // 先把舊的群組存進去
+                if (currentGroup.length > 0) {
+                    groups.push(currentGroup);
+                }
+                // 開啟新的群組
+                currentGroup = [processedQ];
             }
-            currentQuestions = pool.slice(0, count);
-            
-            currentIndex = 0; userAnswers = {}; secondsElapsed = 0; isPracticeChecked = false;
-            
-            document.getElementById('hud-mode').innerText = mode.toUpperCase();
-            document.getElementById('hud-display').style.display = 'flex';
-            switchScreen('quiz-screen');
-            startTimer();
-            renderQuestion();
+        });
+        // 迴圈結束後，存入最後一組
+        if (currentGroup.length > 0) groups.push(currentGroup);
+
+        // 2. 對「群組」進行洗牌 (這樣 Q48, Q49, Q50 會整組移動，順序不變)
+        for (let i = groups.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [groups[i], groups[j]] = [groups[j], groups[i]];
         }
+
+        // 3. 攤平回傳 (變成一維陣列供系統使用)
+        return groups.flat();
+    }
+      function startSystem() {
+        const count = parseInt(document.getElementById('q-count').value);
+        mode = document.getElementById('game-mode').value;
+        
+        // === 修改這裡 START (替換原本的 Randomize 迴圈) ===
+        // 使用新的函式取得「已洗牌但保持連續性」的題庫
+        let pool = getShuffledGroupedQuestions(questionBank);
+        // === 修改這裡 END ===
+
+        // 確保題目數不超過 pool 長度
+        const safeCount = Math.min(count, pool.length);
+        currentQuestions = pool.slice(0, safeCount);
+        
+        currentIndex = 0; userAnswers = {}; secondsElapsed = 0; isPracticeChecked = false;
+        
+        document.getElementById('hud-mode').innerText = mode.toUpperCase();
+        document.getElementById('hud-display').style.display = 'flex';
+        switchScreen('quiz-screen');
+        startTimer();
+        renderQuestion();
+    }
 
         function renderQuestion() {
             const q = currentQuestions[currentIndex];
